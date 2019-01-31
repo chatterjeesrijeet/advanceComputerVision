@@ -1,10 +1,10 @@
 
 %create the setup , click a picture and then load it 
 
-I = imread('Img.jpg');
+I = imread('Indoor.jpeg');
 I = rgb2gray(I);
 size(I);
-%imshow(I);
+imshow(I);
 
 % Select some corner points with the corner function in matlab :
 
@@ -18,53 +18,74 @@ Corner detection method, specified as 'Harris' for the Harris corner detector,
 or 'MinimumEigenvalue' for Shi & Tomasi's minimum eigenvalue method.
 %}
 
-camCordinate = corner(I, 'MinimumEigenvalue', 40, 'QualityLevel', 0.4);
+camCordinate = corner(I, 'MinimumEigenvalue', 100, 'QualityLevel', 0.4);
 %remove some random 8 row index and keep 32 random points.
 
-camCordinate([5 25 26 27 30 34 36 38], : ) = [];
 %lets display the corner points on the image using the hold on functionality 
 imshow(I);
 hold on
 plot(camCordinate(:,1), camCordinate(:,2), 'r*');
 
+%Lets save some coordinates for testing purpose and project them  
+testcamCordinate = camCordinate([79,11,96,25,10], :);
+imshow(I);
+hold on
+plot(testcamCordinate(:,1), testcamCordinate(:,2), 'r*');
+
+%coresponding true world coordinates for the testing points:
+trueworldCoordinate = [0*23 0*23 23*2;
+    0*23 4*23 1*23;
+    0*23 1*23 1*23;
+    0*23 0*23 1*23;
+    0*23 5*23 0*23;
+    ];
+
+% Now lets select the corners using which we will calculate the parameters
+camCordinate = camCordinate([1,92,67,20,30,97,57,70,98,29,12,79,11,96,25,10,13,69,60,49,44,63,58,93,85,89,55,88,90,53,91,66], :);
+
+%Plotting the Selected Corner Co-ordinates :
+imshow(I);
+hold on
+plot(camCordinate(:,1), camCordinate(:,2), 'r*');
 
 % Corresponding world cordinates of the points selected above is calculated
 % manually and stored in the matrix .
 
-worldCoordinate = [0 84 56;
-168 0 112;
-28 0 252;
-0 28 140;
-168 0 84;
-112 0 140;
-0 0 28;
-140 0 168;
-168 0 168;
-84 0 28;
-112 0 168;
-196 0 252;
-168 0 196;
-196 0 224;
-112 0 112;
-56 0 196;
-112 0 252;
-0 0 196;
-28 0 168;
-196 0 112;
-84 0 224;
-0 56 252;
-140 0 112;
-112 0 196;
-168 0 140
-140 0 84;
-140 0 224; 
-84 0 112;
-0 112 28;
-112 0 224;
-140 0 252;
-28 0 84];
+worldCoordinate = [0 23 23*7;
+    0 4*23 23*7;
+    0 23*2 23*7;
+    0 4*23 6*23;
+    0 2*23 6*23;
+    0 4*23 5*23;
+    0 2*23 5*23;
+    0 3*23 3*23;
+    0 1*23 3*23;
+    0 5*23 2*23;
+    0 3*23 2*23;
+    0 0 2*23;
+    0 4*23 1*23;
+    0 1*23 1*23;
+    0 0 1*23;
+    0 5*23 0;
+    0 3*23 0;
+    0 2*23 0;
+    0 0 23*8;
+    23 0 8*23;
+    3*23 0 8*23;
+    2*23 0 7*23;
+    4*23 0 7*23;
+    6*23 0 7*23;
+    1*23 0 6*23;
+    5*23 0 6*23;
+    3*23 0 3*23;
+    4*23 0 2*23;
+    1*23 0 1*23;
+    3*23 0 1*23;
+    5*23 0 1*23;
+    4*23 0 0;
+    ];
 
-% Noe lets create the the homogeneous matrix
+% Now lets create the the homogeneous matrix
 
 % create a matrix of size : (for n points) 2n*12
 rows = 32; 
@@ -169,6 +190,7 @@ K =[alpha skew x_0;
 
 
 theta = acos (-1*cross(A1,A3)*transpose(cross(A2,A3))/(norm(cross(A1,A3)*norm(cross(A2,A3))))); %theta comes out as 1.5 radians which is app. 86 degrees.
+theta_deg = 180*7*theta/22 ;
 sinTheta = sin(theta);
 cosTheta = cos(theta);
 
@@ -177,3 +199,39 @@ R = [R1 R2 R3];
 R = transpose(reshape(R,3,3));
 
 t = inv(K) * B; %Translation matrix
+
+% ------------ Calculation of reprojection Error ----------------
+
+no_of_test_points = 5 ;
+%converting the true world co-ordinate to the Homogeneous system 
+newcol = ones(5,1);
+final = [trueworldCoordinate newcol];
+semfinal = transpose(final);
+
+%reconstruction of the pixel values :
+
+recreatedpixel = M * semfinal;
+finalrec = transpose(recreatedpixel);
+finalrec = finalrec * -1; 
+
+for i = 1:1:no_of_test_points
+    finalrec(i,1) = finalrec(i,1)/finalrec(i,3);
+    finalrec(i,2) = finalrec(i,2)/finalrec(i,3);
+    finalrec(i,3) = finalrec(i,3)/finalrec(i,3);
+end
+
+% finding the euclidean reprojection Error 
+sum = 0 ;
+
+for i = 1:1:no_of_test_points
+    x_diff = finalrec(i,1)- testcamCordinate(i,1);
+    square_x_diff = x_diff ^ 2;
+    y_diff = finalrec(i,2)- testcamCordinate(i,2);
+    square_y_diff = y_diff ^ 2;
+    total_diff = square_x_diff + square_y_diff;
+    euclid_dis = total_diff ^(0.5);
+    sum = sum + euclid_dis;
+end
+
+% Average reprojection error :
+average_reproj_error = sum /no_of_test_points;
